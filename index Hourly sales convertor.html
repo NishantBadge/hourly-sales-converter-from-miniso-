@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Store Hourly Sales Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0b1020;--card:#141a2e;--line:#263052;--txt:#e6e9f5;--mut:#8b93b5;--acc:#6c8cff;--acc2:#3ddc97;--warn:#ffb547;--err:#ff6b81}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt);min-height:100vh;
+background:radial-gradient(circle at 15% 0%,#1d2a5c 0,transparent 45%),radial-gradient(circle at 90% 20%,#123d36 0,transparent 40%),var(--bg);padding:32px 16px}
+.wrap{max-width:1150px;margin:auto}
+header{text-align:center;margin-bottom:26px}
+header h1{font-size:clamp(1.7rem,4vw,2.4rem);background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+header p{color:var(--mut);margin-top:8px}
+.card{background:rgba(20,26,46,.85);border:1px solid var(--line);border-radius:16px;padding:22px;margin-bottom:18px}
+.card h2{font-size:1.05rem;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.num{width:26px;height:26px;border-radius:50%;background:var(--acc);display:grid;place-items:center;font-size:.85rem;font-weight:700}
+#drop{border:2px dashed var(--line);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:.2s}
+#drop:hover,#drop.over{border-color:var(--acc);background:rgba(108,140,255,.08);transform:scale(1.01)}
+#drop .big{font-size:2.4rem}
+#drop b{color:var(--acc)}
+#drop small{display:block;color:var(--mut);margin-top:6px}
+.msg{margin-top:12px;padding:10px 14px;border-radius:10px;font-size:.9rem}
+.msg.err{background:rgba(255,107,129,.12);color:var(--err)}
+.msg.warn{background:rgba(255,181,71,.12);color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:#10162a;border:1px solid var(--line);border-radius:12px;padding:12px}
+.kpi span{display:block;color:var(--mut);font-size:.78rem}
+.kpi b{font-size:1.25rem}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+.bar>div{flex:1;min-width:200px}
+label.lbl{display:block;font-size:.8rem;color:var(--mut);margin-bottom:5px}
+input[type=text],select{width:100%;background:#0b1020;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 10px;font-size:.9rem}
+input[type=text]:focus,select:focus{outline:none;border-color:var(--acc)}
+button{cursor:pointer;border:1px solid var(--line);background:#1c2440;color:var(--txt);border-radius:8px;padding:8px 12px;font-size:.88rem;transition:.15s}
+button:hover{border-color:var(--acc)}
+.dl{padding:11px 20px;font-weight:600;border:none;background:linear-gradient(90deg,var(--acc),var(--acc2));color:#08101f;border-radius:10px}
+.dl:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.opt{display:flex;align-items:center;gap:8px;font-size:.9rem;margin-top:12px}
+input[type=checkbox]{accent-color:var(--acc);width:16px;height:16px}
+.tbl{overflow:auto;max-height:480px;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:left}
+th{position:sticky;top:0;background:#1f3b2c;color:#d8f5e5}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+tr:hover td{background:rgba(108,140,255,.06)}
+tr.unm td:nth-child(2){color:var(--warn)}
+details summary{cursor:pointer;color:var(--mut);font-size:.9rem}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:12px}
+.map div{display:grid;grid-template-columns:70px 1fr;gap:6px}
+#stats{color:var(--mut);font-size:.85rem;margin-bottom:10px}
+footer{text-align:center;color:var(--mut);font-size:.8rem;margin-top:22px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Store Hourly Sales Converter</h1>
+    <p>Upload the raw "Store Hourly Sales Report" → download the structured hourly file. Runs fully in your browser.</p>
+  </header>
+
+  <div class="card">
+    <h2><span class="num">1</span>Upload raw report</h2>
+    <div id="drop">
+      <div class="big">📊</div>
+      <div><b>Click to choose</b> or drag &amp; drop the raw file</div>
+      <small>.xlsx, .xls or .csv</small>
+    </div>
+    <input type="file" id="file" accept=".xlsx,.xls,.xlsm,.csv,.txt" hidden>
+    <div id="msg"></div>
+  </div>
+
+  <div id="work" hidden>
+    <div class="card">
+      <h2><span class="num">2</span>Summary &amp; download</h2>
+      <div class="kpis" id="kpis"></div>
+      <div class="bar">
+        <div><label class="lbl">Output file name</label><input type="text" id="outName"></div>
+        <div style="flex:0 0 150px"><label class="lbl">Format</label>
+          <select id="fmt"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV (.csv)</option></select></div>
+        <button class="dl" id="dl">⬇ Download</button>
+      </div>
+      <div class="opt"><input type="checkbox" id="sort" checked><label for="sort">Sort by store, then date, then hour</label></div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>🏬 Store name mapping (edit here for this session)</summary>
+        <div class="map" id="map"></div>
+        <button id="addStore" style="margin-top:10px">+ Add store</button>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2><span class="num">3</span>Preview</h2>
+      <div id="stats"></div>
+      <div class="tbl"><table id="prev"></table></div>
+    </div>
+  </div>
+  <footer>Your files never leave your device.</footer>
+</div>
+
+<script>
+/* ===== STORE NAME MAPPING — edit this list to permanently add/change stores ===== */
+const STORE_MAP = {
+  IN1Z:'Patiala', INV6:'MUSSOORIE', INH7:'INDORE', INAJ:'GOA', INBK:'Haldwani',
+  INZ2:'LULU MALL HYD', IN9V:'DEHARADUN', ING9:'JALANDHAR', INS2:'VESU',
+  INJ7:'Surat Adajan', INAH:'BATHINDA', INI8:'BHOPAL', INK2:'JAMMU',
+  INI5:'Shimla', INL8:'BORIVALI', INFJ:'Curo Jalandhar', INFM:'Bhiwandi'
+};
+/* ================================================================================ */
+
+const HEAD=['Store Code','Store Name','Date','Weekday','Hour','Nob','QTY','Sales','Net Sales','Discount'];
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const CN={'一':'Mon','二':'Tue','三':'Wed','四':'Thu','五':'Fri','六':'Sat','日':'Sun','天':'Sun'};
+let map={...STORE_MAP}, raw=null, out=[];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=v=>{const n=parseFloat(String(v??'').replace(/,/g,''));return isNaN(n)?0:n};
+const fmtN=n=>n.toLocaleString('en-IN',{maximumFractionDigits:2});
+
+/* ---------- upload ---------- */
+const drop=$('drop'), fileIn=$('file');
+drop.onclick=()=>fileIn.click();
+['dragover','dragenter'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{const f=ev.dataTransfer.files[0]; if(f) load(f)});
+fileIn.onchange=()=>{if(fileIn.files[0]) load(fileIn.files[0]); fileIn.value=''};
+
+function showMsg(html,type){$('msg').innerHTML=html?`<div class="msg ${type}">${html}</div>`:''}
+
+function load(f){
+  showMsg('');
+  const ext=f.name.split('.').pop().toLowerCase(), r=new FileReader();
+  r.onerror=()=>showMsg('Could not read the file.','err');
+  if(['xlsx','xls','xlsm'].includes(ext)){
+    r.onload=e=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+        let aoa=null;
+        for(const n of wb.SheetNames){
+          const a=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''});
+          if(findHeader(a)>=0){aoa=a;break}
+        }
+        if(!aoa) return showMsg('Could not find the report header (Date / Hour columns) in any sheet.','err');
+        raw=aoa; process();
+      }catch(x){showMsg('Error reading Excel: '+esc(x.message),'err')}
+    };
+    r.readAsArrayBuffer(f);
+  }else{
+    r.onload=e=>{
+      try{
+        const p=Papa.parse(e.target.result,{skipEmptyLines:true,delimitersToGuess:[',','\t',';','|']});
+        if(findHeader(p.data)<0) return showMsg('Could not find the report header in this file.','err');
+        raw=p.data; process();
+      }catch(x){showMsg('Error reading file: '+esc(x.message),'err')}
+    };
+    r.readAsText(f);
+  }
+}
+
+function findHeader(a){
+  for(let i=0;i<Math.min(a.length,15);i++){
+    const row=(a[i]||[]).map(c=>String(c));
+    if(row.some(c=>c.includes('日期')||/^\s*date/i.test(c)) && row.some(c=>c.includes('时段')||/^\s*hour/i.test(c))) return i;
+  }
+  return -1;
+}
+
+/* ---------- formatters ---------- */
+function toYMD(v){
+  if(v instanceof Date && !isNaN(v)) return [v.getFullYear(),v.getMonth()+1,v.getDate()];
+  if(typeof v==='number'){const d=XLSX.SSF.parse_date_code(v); return d?[d.y,d.m,d.d]:null}
+  const s=String(v).trim(), m=s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return [+m[1],+m[2],+m[3]];
+  const d=new Date(s); return isNaN(d)?null:[d.getFullYear(),d.getMonth()+1,d.getDate()];
+}
+const ymdStr=a=>a?`${a[0]}-${String(a[1]).padStart(2,'0')}-${String(a[2]).padStart(2,'0')}`:'';
+
+function fmtWeek(v,ymd){
+  const s=String(v), m=s.match(/(mon|tue|wed|thu|fri|sat|sun)/i);
+  if(m) return m[1][0].toUpperCase()+m[1].slice(1,3).toLowerCase();
+  const c=s.match(/[星周]期?([一二三四五六日天])/);
+  if(c) return CN[c[1]];
+  return ymd?DAYS[new Date(ymd[0],ymd[1]-1,ymd[2]).getDay()]:s.trim();
+}
+
+function fmtHour(v){
+  const s=String(v), m=s.match(/(\d{1,2})(?::\d{2})*\s*[-–~至]\s*(\d{1,2})/);
+  if(!m) return {txt:s.trim(),start:99};
+  const a=parseInt(m[1],10), b=parseInt(m[2],10)%24;
+  return {txt:`${a} - ${b}`,start:a};
+}
+
+/* ---------- main processing ---------- */
+function process(){
+  if(!raw) return;
+  const hi=findHeader(raw), H=raw[hi].map(h=>String(h).trim());
+  const find=(...t)=>H.findIndex(h=>t.some(x=>x instanceof RegExp?x.test(h):h.includes(x)));
+  const ix={
+    code:find('门店代码',/store\s*code/i), name:find('门店名称'), date:find('日期',/^date/i),
+    wd:find('Weekday','星期'), hour:find('时段',/^hour/i), nob:find('客单量',/customer\s*count/i,/^nob$/i),
+    qty:find('销售数量',/^qty$/i), sales:find('销售金额',/^sales$/i), net:find('净销售额',/net\s*sales/i),
+    disc:find('优惠金额',/discount/i)
+  };
+  const need={code:'Store Code (门店代码)',date:'Date',hour:'Hour',nob:'Customer Count',qty:'QTY',sales:'Sales',net:'Net Sales',disc:'Discount'};
+  const miss=Object.keys(need).filter(k=>ix[k]<0).map(k=>need[k]);
+  if(miss.length){$('work').hidden=true; return showMsg('Missing columns in the file: '+miss.join(', '),'err')}
+
+  const unm=new Set();
+  out=[];
+  for(let i=hi+1;i<raw.length;i++){
+    const r=raw[i]; if(!r) continue;
+    const code=String(r[ix.code]??'').trim().toUpperCase();
+    if(!code || r.some(c=>String(c).includes('总计'))) continue;
+    const ymd=toYMD(r[ix.date]), h=fmtHour(r[ix.hour]);
+    let name=map[code];
+    if(!name){unm.add(code); name=ix.name>=0?String(r[ix.name]).trim():code}
+    out.push({code,name,ymd,date:ymdStr(ymd),wd:fmtWeek(ix.wd>=0?r[ix.wd]:'',ymd),hour:h.txt,hs:h.start,
+      nob:num(r[ix.nob]),qty:num(r[ix.qty]),sales:num(r[ix.sales]),net:num(r[ix.net]),disc:num(r[ix.disc]),unm:!map[code]});
+  }
+  if(!out.length){$('work').hidden=true; return showMsg('No data rows found.','err')}
+
+  if($('sort').checked){
+    const order=Object.keys(map);
+    const oi=c=>{const k=order.indexOf(c);return k<0?999:k};
+    out.sort((a,b)=>oi(a.code)-oi(b.code)||a.code.localeCompare(b.code)||a.date.localeCompare(b.date)||a.hs-b.hs);
+  }
+
+  showMsg(unm.size?`⚠ These store codes are not in your mapping, so the raw name was used: <b>${[...unm].map(esc).join(', ')}</b>. Add them under "Store name mapping" below.`:'','warn');
+  const dates=[...new Set(out.map(o=>o.date))].sort();
+  if(!$('outName').dataset.touched) $('outName').value='Hourly_Sales_'+(dates.length>1?dates[0]+'_to_'+dates[dates.length-1]:dates[0]);
+  $('work').hidden=false;
+  renderKpis(dates); renderMap(); renderPreview();
+}
+$('outName').addEventListener('input',e=>e.target.dataset.touched='1');
+$('sort').onchange=process;
+
+function renderKpis(dates){
+  const s=k=>out.reduce((t,o)=>t+o[k],0);
+  const stores=new Set(out.map(o=>o.code)).size;
+  $('kpis').innerHTML=[['Rows',out.length],['Stores',stores],['Dates',dates.join(', ')],['Nob',fmtN(s('nob'))],
+    ['QTY',fmtN(s('qty'))],['Sales',fmtN(s('sales'))],['Net Sales',fmtN(s('net'))],['Discount',fmtN(s('disc'))]]
+    .map(([k,v])=>`<div class="kpi"><span>${k}</span><b>${esc(v)}</b></div>`).join('');
+}
+
+function renderPreview(){
+  $('stats').textContent=`${out.length} rows (all shown)`;
+  $('prev').innerHTML='<thead><tr>'+HEAD.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'+
+    out.map(o=>`<tr class="${o.unm?'unm':''}"><td>${esc(o.code)}</td><td>${esc(o.name)}</td><td>${o.date}</td><td>${esc(o.wd)}</td><td>${esc(o.hour)}</td>`+
+      ['nob','qty','sales','net','disc'].map(k=>`<td class="n">${o[k]}</td>`).join('')+'</tr>').join('')+'</tbody>';
+}
+
+function renderMap(){
+  const codes=[...new Set([...Object.keys(map),...out.map(o=>o.code)])];
+  $('map').innerHTML=codes.map(c=>`<div><input type="text" value="${esc(c)}" readonly><input type="text" data-c="${esc(c)}" value="${esc(map[c]||'')}" placeholder="Enter name"></div>`).join('');
+}
+$('map').addEventListener('change',e=>{
+  const c=e.target.dataset.c; if(!c) return;
+  const v=e.target.value.trim(); if(v) map[c]=v; else delete map[c];
+  process();
+});
+$('addStore').onclick=()=>{
+  const c=(prompt('Store code (e.g. INZ2):')||'').trim().toUpperCase(); if(!c) return;
+  const n=(prompt('Store name for '+c+':')||'').trim(); if(!n) return;
+  map[c]=n; process();
+};
+
+/* ---------- download ---------- */
+$('dl').onclick=()=>{
+  if(!out.length) return;
+  const n=($('outName').value.trim()||'Hourly_Sales');
+  if($('fmt').value==='csv'){
+    const csv='\ufeff'+Papa.unparse([HEAD,...out.map(o=>[o.code,o.name,o.date,o.wd,o.hour,o.nob,o.qty,o.sales,o.net,o.disc])]);
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    a.download=n+'.csv'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000); return;
+  }
+  const ws=XLSX.utils.aoa_to_sheet([HEAD,...out.map(o=>[o.code,o.name,o.date,o.wd,o.hour,o.nob,o.qty,o.sales,o.net,o.disc])]);
+  out.forEach((o,i)=>{ // store Date as real Excel date (yyyy-mm-dd)
+    if(!o.ymd) return;
+    const ref=XLSX.utils.encode_cell({r:i+1,c:2});
+    ws[ref]={t:'n',v:(Date.UTC(o.ymd[0],o.ymd[1]-1,o.ymd[2])-Date.UTC(1899,11,30))/86400000,z:'yyyy-mm-dd'};
+  });
+  ws['!cols']=[{wch:11},{wch:20},{wch:12},{wch:9},{wch:9},{wch:7},{wch:7},{wch:10},{wch:10},{wch:10}];
+  ws['!autofilter']={ref:ws['!ref']};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Hourly Sales');
+  XLSX.writeFile(wb,n+'.xlsx');
+};
+</script>
+</body>
+</html>
